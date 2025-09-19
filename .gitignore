@@ -1,0 +1,5 @@
+.DS_Store
+./.vscode
+./.idea
+*_test.go
+*.pdf
