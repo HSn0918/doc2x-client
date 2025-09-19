@@ -1,7 +1,7 @@
 package client
 
 import (
-	"encoding/json"
+	"context"
 	"fmt"
 	"strings"
 	"time"
@@ -47,23 +47,23 @@ type Info interface {
 
 // Parser handles document parsing operations
 type Parser interface {
-	UploadPDF(pdfData []byte) (*UploadResponse, error)
-	PreUpload() (*PreUploadResponse, error)
-	UploadToPresignedURL(url string, fileData []byte) error
-	GetStatus(uid string) (*StatusResponse, error)
-	WaitForParsing(uid string, pollInterval time.Duration) (*StatusResponse, error)
+	UploadPDF(ctx context.Context, pdfData []byte) (*UploadResponse, error)
+	PreUpload(ctx context.Context) (*PreUploadResponse, error)
+	UploadToPresignedURL(ctx context.Context, url string, fileData []byte) error
+	GetStatus(ctx context.Context, uid string) (*StatusResponse, error)
+	WaitForParsing(ctx context.Context, uid string, pollInterval time.Duration) (*StatusResponse, error)
 }
 
 // Converter handles document conversion operations
 type Converter interface {
-	ConvertParse(req ConvertRequest) (*ConvertResponse, error)
-	GetConvertResult(uid string) (*ConvertResultResponse, error)
-	WaitForConversion(uid string, pollInterval time.Duration) (*ConvertResultResponse, error)
+	ConvertParse(ctx context.Context, req ConvertRequest) (*ConvertResponse, error)
+	GetConvertResult(ctx context.Context, uid string) (*ConvertResultResponse, error)
+	WaitForConversion(ctx context.Context, uid string, pollInterval time.Duration) (*ConvertResultResponse, error)
 }
 
 // Downloader handles file download operations
 type Downloader interface {
-	DownloadFile(url string) ([]byte, error)
+	DownloadFile(ctx context.Context, url string) ([]byte, error)
 }
 
 // Client combines all doc2x operations
@@ -76,7 +76,6 @@ type Client interface {
 
 type client struct {
 	restyClient *resty.Client
-	baseURL     string
 }
 
 var _ Client = (*client)(nil)
@@ -85,7 +84,6 @@ type Option func(*client)
 
 func WithBaseURL(baseURL string) Option {
 	return func(c *client) {
-		c.baseURL = baseURL
 		c.restyClient.SetBaseURL(baseURL)
 	}
 }
@@ -104,7 +102,6 @@ func WithAPIKey(apiKey string) Option {
 
 func NewClient(opts ...Option) Client {
 	c := &client{
-		baseURL:     DefaultBaseURL,
 		restyClient: resty.New(),
 	}
 
@@ -188,19 +185,21 @@ type ConvertResultResponse struct {
 
 // UploadPDF uploads PDF data for parsing.
 // It returns the upload response containing the UID for tracking.
-func (c *client) UploadPDF(pdfData []byte) (*UploadResponse, error) {
+func (c *client) UploadPDF(ctx context.Context, pdfData []byte) (*UploadResponse, error) {
+	var result UploadResponse
 	resp, err := c.restyClient.R().
+		SetContext(ctx).
 		SetHeader("Content-Type", "application/pdf").
 		SetBody(pdfData).
+		SetResult(&result).
 		Post(EndpointParsePDF)
 
 	if err != nil {
 		return nil, fmt.Errorf("upload PDF failed: %w", err)
 	}
 
-	var result UploadResponse
-	if err := json.Unmarshal(resp.Body(), &result); err != nil {
-		return nil, fmt.Errorf("unmarshal response failed: %w", err)
+	if !resp.IsSuccess() {
+		return nil, fmt.Errorf("upload PDF failed with status: %s", resp.Status())
 	}
 
 	return &result, nil
@@ -208,17 +207,19 @@ func (c *client) UploadPDF(pdfData []byte) (*UploadResponse, error) {
 
 // PreUpload initiates a presigned upload flow.
 // It returns presigned URL for direct file upload.
-func (c *client) PreUpload() (*PreUploadResponse, error) {
+func (c *client) PreUpload(ctx context.Context) (*PreUploadResponse, error) {
+	var result PreUploadResponse
 	resp, err := c.restyClient.R().
+		SetContext(ctx).
+		SetResult(&result).
 		Post(EndpointPreUpload)
 
 	if err != nil {
 		return nil, fmt.Errorf("preupload failed: %w", err)
 	}
 
-	var result PreUploadResponse
-	if err := json.Unmarshal(resp.Body(), &result); err != nil {
-		return nil, fmt.Errorf("unmarshal response failed: %w", err)
+	if !resp.IsSuccess() {
+		return nil, fmt.Errorf("preupload failed with status: %s", resp.Status())
 	}
 
 	return &result, nil
@@ -226,8 +227,9 @@ func (c *client) PreUpload() (*PreUploadResponse, error) {
 
 // UploadToPresignedURL uploads file data to a presigned URL.
 // This is used in conjunction with PreUpload for large file uploads.
-func (c *client) UploadToPresignedURL(url string, fileData []byte) error {
-	_, err := resty.New().R().
+func (c *client) UploadToPresignedURL(ctx context.Context, url string, fileData []byte) error {
+	resp, err := c.restyClient.R().
+		SetContext(ctx).
 		SetBody(fileData).
 		Put(url)
 
@@ -235,23 +237,29 @@ func (c *client) UploadToPresignedURL(url string, fileData []byte) error {
 		return fmt.Errorf("upload to presigned URL failed: %w", err)
 	}
 
+	if !resp.IsSuccess() {
+		return fmt.Errorf("upload to presigned URL failed with status: %s", resp.Status())
+	}
+
 	return nil
 }
 
 // GetStatus checks the parsing status for a given UID.
 // It returns detailed status information including progress and results.
-func (c *client) GetStatus(uid string) (*StatusResponse, error) {
+func (c *client) GetStatus(ctx context.Context, uid string) (*StatusResponse, error) {
+	var result StatusResponse
 	resp, err := c.restyClient.R().
+		SetContext(ctx).
 		SetQueryParam("uid", uid).
+		SetResult(&result).
 		Get(EndpointParseStatus)
 
 	if err != nil {
 		return nil, fmt.Errorf("get status failed: %w", err)
 	}
 
-	var result StatusResponse
-	if err := json.Unmarshal(resp.Body(), &result); err != nil {
-		return nil, fmt.Errorf("unmarshal response failed: %w", err)
+	if !resp.IsSuccess() {
+		return nil, fmt.Errorf("get status failed with status: %s", resp.Status())
 	}
 
 	return &result, nil
@@ -259,18 +267,20 @@ func (c *client) GetStatus(uid string) (*StatusResponse, error) {
 
 // ConvertParse initiates document conversion with specified parameters.
 // It returns conversion tracking information.
-func (c *client) ConvertParse(req ConvertRequest) (*ConvertResponse, error) {
+func (c *client) ConvertParse(ctx context.Context, req ConvertRequest) (*ConvertResponse, error) {
+	var result ConvertResponse
 	resp, err := c.restyClient.R().
+		SetContext(ctx).
 		SetBody(req).
+		SetResult(&result).
 		Post(EndpointConvertParse)
 
 	if err != nil {
 		return nil, fmt.Errorf("convert parse failed: %w", err)
 	}
 
-	var result ConvertResponse
-	if err := json.Unmarshal(resp.Body(), &result); err != nil {
-		return nil, fmt.Errorf("unmarshal response failed: %w", err)
+	if !resp.IsSuccess() {
+		return nil, fmt.Errorf("convert parse failed with status: %s", resp.Status())
 	}
 
 	return &result, nil
@@ -278,18 +288,20 @@ func (c *client) ConvertParse(req ConvertRequest) (*ConvertResponse, error) {
 
 // GetConvertResult retrieves conversion results for a given UID.
 // It returns the final converted document information.
-func (c *client) GetConvertResult(uid string) (*ConvertResultResponse, error) {
+func (c *client) GetConvertResult(ctx context.Context, uid string) (*ConvertResultResponse, error) {
+	var result ConvertResultResponse
 	resp, err := c.restyClient.R().
+		SetContext(ctx).
 		SetQueryParam("uid", uid).
+		SetResult(&result).
 		Get(EndpointConvertResult)
 
 	if err != nil {
 		return nil, fmt.Errorf("get convert result failed: %w", err)
 	}
 
-	var result ConvertResultResponse
-	if err := json.Unmarshal(resp.Body(), &result); err != nil {
-		return nil, fmt.Errorf("unmarshal response failed: %w", err)
+	if !resp.IsSuccess() {
+		return nil, fmt.Errorf("get convert result failed with status: %s", resp.Status())
 	}
 
 	return &result, nil
@@ -297,70 +309,102 @@ func (c *client) GetConvertResult(uid string) (*ConvertResultResponse, error) {
 
 // DownloadFile downloads a file from the given URL.
 // It handles URL unescaping and returns the raw file content.
-func (c *client) DownloadFile(url string) ([]byte, error) {
-	// Fix URL encoding issues
+func (c *client) DownloadFile(ctx context.Context, url string) ([]byte, error) {
 	url = strings.ReplaceAll(url, "\\u0026", "&")
 
-	resp, err := resty.New().R().Get(url)
+	resp, err := c.restyClient.R().
+		SetContext(ctx).
+		Get(url)
+
 	if err != nil {
 		return nil, fmt.Errorf("download file failed: %w", err)
+	}
+
+	if !resp.IsSuccess() {
+		return nil, fmt.Errorf("download file failed with status: %s", resp.Status())
 	}
 
 	return resp.Body(), nil
 }
 
-// WaitForParsing polls the parsing status until completion or failure.
-// It uses the provided poll interval to check status periodically.
-// Returns the final status or an error if parsing fails.
-func (c *client) WaitForParsing(uid string, pollInterval time.Duration) (*StatusResponse, error) {
+// WaitForParsing polls the parsing status until completion, failure, or context cancellation.
+// It uses time.Ticker for precise timing and automatically applies ProcessingTimeout if context has no deadline.
+// Returns the final status or an error if parsing fails or context is cancelled.
+func (c *client) WaitForParsing(ctx context.Context, uid string, pollInterval time.Duration) (*StatusResponse, error) {
+	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, ProcessingTimeout)
+		defer cancel()
+	}
+
+	ticker := time.NewTicker(pollInterval)
+	defer ticker.Stop()
+
 	for {
-		status, err := c.GetStatus(uid)
-		if err != nil {
-			return nil, err
-		}
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-ticker.C:
+			status, err := c.GetStatus(ctx, uid)
+			if err != nil {
+				return nil, err
+			}
 
-		if status.Code != CodeSuccess {
-			return nil, fmt.Errorf("parse failed: %s - %s", status.Code, status.Msg)
-		}
+			if status.Code != CodeSuccess {
+				return nil, fmt.Errorf("parse API returned error: %s - %s", status.Code, status.Msg)
+			}
 
-		switch status.Data.Status {
-		case StatusSuccess:
-			return status, nil
-		case StatusFailed:
-			return nil, fmt.Errorf("parse failed: %s", status.Data.Detail)
-		case StatusProcessing:
-			time.Sleep(pollInterval)
-		default:
-			// Unknown status, continue polling
-			time.Sleep(pollInterval)
+			switch status.Data.Status {
+			case StatusSuccess:
+				return status, nil
+			case StatusFailed:
+				return nil, fmt.Errorf("parse failed with detail: %s", status.Data.Detail)
+			case StatusProcessing:
+				continue
+			default:
+				continue
+			}
 		}
 	}
 }
 
-// WaitForConversion polls the conversion status until completion or failure.
-// It uses the provided poll interval to check status periodically.
-// Returns the final result or an error if conversion fails.
-func (c *client) WaitForConversion(uid string, pollInterval time.Duration) (*ConvertResultResponse, error) {
+// WaitForConversion polls the conversion status until completion, failure, or context cancellation.
+// It uses time.Ticker for precise timing and automatically applies ProcessingTimeout if context has no deadline.
+// Returns the final result or an error if conversion fails or context is cancelled.
+func (c *client) WaitForConversion(ctx context.Context, uid string, pollInterval time.Duration) (*ConvertResultResponse, error) {
+	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, ProcessingTimeout)
+		defer cancel()
+	}
+
+	ticker := time.NewTicker(pollInterval)
+	defer ticker.Stop()
+
 	for {
-		result, err := c.GetConvertResult(uid)
-		if err != nil {
-			return nil, err
-		}
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-ticker.C:
+			result, err := c.GetConvertResult(ctx, uid)
+			if err != nil {
+				return nil, err
+			}
 
-		if result.Code != CodeSuccess {
-			return nil, fmt.Errorf("convert failed: %s", result.Code)
-		}
+			if result.Code != CodeSuccess {
+				return nil, fmt.Errorf("convert API returned error: %s", result.Code)
+			}
 
-		switch result.Data.Status {
-		case StatusSuccess:
-			return result, nil
-		case StatusFailed:
-			return nil, fmt.Errorf("convert failed")
-		case StatusProcessing:
-			time.Sleep(pollInterval)
-		default:
-			// Unknown status, continue polling
-			time.Sleep(pollInterval)
+			switch result.Data.Status {
+			case StatusSuccess:
+				return result, nil
+			case StatusFailed:
+				return nil, fmt.Errorf("convert failed")
+			case StatusProcessing:
+				continue
+			default:
+				continue
+			}
 		}
 	}
 }
