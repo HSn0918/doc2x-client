@@ -1,55 +1,48 @@
 # doc2x-client
 
-Go client for doc2x API v2 - PDF parsing and document conversion.
+面向 Doc2X API v2 的 Go SDK，覆盖 PDF 解析、导出、图片 layout OCR 等核心接口。
 
-**Documentation:** https://noedgeai.feishu.cn/wiki/Q8QIw3PT7i4QghkhPoecsmSCnG1
+- 统一封装 `/parse/preupload`、`/parse/status`、`/convert/parse`、`/convert/parse/result`
+- 内建轮询工具：`WaitForParsing` / `WaitForConversion` / `WaitForImageLayout`
+- 同步/异步图片解析接口、OSS 直传辅助方法、结果下载工具
 
-## Installation
+## 安装
 
 ```bash
 go get github.com/hsn0918/doc2x-client
 ```
 
-## Usage
+## 快速上手
 
 ```go
-package main
+c := client.NewClient(client.WithAPIKey("sk-xxx"))
+ctx := context.Background()
 
-import (
-    "context"
-    "log"
-    "time"
+pre, _ := c.PreUpload(ctx)
+_ = c.UploadToPresignedURL(ctx, pre.Data.URL, pdfBytes)
+status, _ := c.WaitForParsing(ctx, pre.Data.UID, 2*time.Second)
 
-    "github.com/hsn0918/doc2x-client"
-)
-
-func main() {
-    // Create client
-    c := client.NewClient(client.WithAPIKey("your-api-key"))
-
-    // Create context with timeout
-    ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-    defer cancel()
-
-    // Upload PDF
-    resp, err := c.UploadPDF(ctx, pdfData)
-    if err != nil {
-        log.Fatal(err)
-    }
-
-    // Wait for parsing
-    status, err := c.WaitForParsing(ctx, resp.Data.UID, 3*time.Second)
-    if err != nil {
-        log.Fatal(err)
-    }
-
-    // Access parsed markdown
-    for _, page := range status.Data.Result.Pages {
-        println(page.Md)
-    }
-}
+convertReq := client.ConvertRequest{UID: pre.Data.UID, To: "md", FormulaMode: "normal"}
+_, _ = c.ConvertParse(ctx, convertReq)
+result, _ := c.WaitForConversion(ctx, pre.Data.UID, 2*time.Second)
+data, _ := c.DownloadFile(ctx, result.Data.URL)
 ```
 
-## License
+图片 layout（≤7 MB）：
 
-MIT
+```go
+layout, _ := c.ParseImageLayout(ctx, imageBytes) // 同步
+job, _ := c.AsyncParseImageLayout(ctx, imageBytes) // 异步
+layoutStatus, _ := c.WaitForImageLayout(ctx, job.Data.UID, 2*time.Second)
+```
+
+## 注意事项
+
+- Base URL：`https://v2.doc2x.noedgeai.com`，务必直连；鉴权头 `Authorization: Bearer sk-xxx`
+- 建议优先使用 `PreUpload + OSS PUT`，单次可达 1 GB；`UploadPDF` 仅适合 ≤300 MB
+- 轮询频率 1–3 s，接口结果 24 h 过期；若遇到 `parse_*` 错误码请参考官方 FAQ
+
+## 参考
+
+- Doc2X API v2 官方文档：https://noedgeai.feishu.cn/wiki/Q8QIw3PT7i4QghkhPoecsmSCnG1
+- Doc2X 常见问题 / 图片接口文档：见飞书文档入口
