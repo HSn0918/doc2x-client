@@ -1,11 +1,11 @@
 package client
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"time"
-
-	"github.com/go-resty/resty/v2"
 )
 
 // UploadPDF uploads PDF data for parsing.
@@ -14,11 +14,20 @@ func (c *client) UploadPDF(ctx context.Context, pdfData []byte) (*UploadResponse
 		return nil, ErrEmptyPDFData
 	}
 
+	return c.UploadPDFReader(ctx, bytes.NewReader(pdfData))
+}
+
+// UploadPDFReader streams PDF data for parsing without buffering the entire payload in memory.
+func (c *client) UploadPDFReader(ctx context.Context, pdfReader io.Reader) (*UploadResponse, error) {
+	if pdfReader == nil {
+		return nil, ErrNilReader
+	}
+
 	var result UploadResponse
 	resp, err := c.restyClient.R().
 		SetContext(ctx).
 		SetHeader("Content-Type", "application/pdf").
-		SetBody(pdfData).
+		SetBody(pdfReader).
 		SetResult(&result).
 		Post(EndpointParsePDF)
 
@@ -70,13 +79,22 @@ func (c *client) UploadToPresignedURL(ctx context.Context, url string, fileData 
 		return ErrEmptyFileData
 	}
 
-	tempClient := resty.New().
-		SetTimeout(ProcessingTimeout).
-		SetRetryCount(3)
+	return c.UploadToPresignedURLFrom(ctx, url, bytes.NewReader(fileData))
+}
 
-	resp, err := tempClient.R().
+// UploadToPresignedURLFrom streams file data to the provided OSS URL without buffering.
+func (c *client) UploadToPresignedURLFrom(ctx context.Context, url string, file io.Reader) error {
+	if url == "" {
+		return ErrEmptyPresignedURL
+	}
+
+	if file == nil {
+		return ErrNilReader
+	}
+
+	resp, err := c.transferClient.R().
 		SetContext(ctx).
-		SetBody(fileData).
+		SetBody(file).
 		Put(url)
 
 	if err != nil {
@@ -124,7 +142,7 @@ func (c *client) WaitForParsing(ctx context.Context, uid string, pollInterval ti
 		return nil, ErrEmptyUID
 	}
 
-	return waitWithPolling(ctx, uid, pollInterval, "parsing", c.GetStatus, func(status *StatusResponse) (bool, error) {
+	return waitWithPolling(ctx, uid, pollInterval, "parsing", c.processingTimeout, c.GetStatus, func(status *StatusResponse) (bool, error) {
 		if status.Data == nil {
 			return false, nil
 		}

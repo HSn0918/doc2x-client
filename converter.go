@@ -76,7 +76,7 @@ func (c *client) WaitForConversion(ctx context.Context, uid string, pollInterval
 		return nil, ErrEmptyUID
 	}
 
-	return waitWithPolling(ctx, uid, pollInterval, "conversion", c.GetConvertResult, func(result *ConvertResultResponse) (bool, error) {
+	return waitWithPolling(ctx, uid, pollInterval, "conversion", c.processingTimeout, c.GetConvertResult, func(result *ConvertResultResponse) (bool, error) {
 		switch result.Data.Status {
 		case StatusSuccess:
 			if result.Data.URL == "" {

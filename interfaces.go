@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"io"
 	"time"
 )
 
@@ -14,8 +15,10 @@ type Info interface {
 // Parser handles document parsing operations
 type Parser interface {
 	UploadPDF(ctx context.Context, pdfData []byte) (*UploadResponse, error)
+	UploadPDFReader(ctx context.Context, r io.Reader) (*UploadResponse, error)
 	PreUpload(ctx context.Context) (*PreUploadResponse, error)
 	UploadToPresignedURL(ctx context.Context, url string, fileData []byte) error
+	UploadToPresignedURLFrom(ctx context.Context, url string, r io.Reader) error
 	GetStatus(ctx context.Context, uid string) (*StatusResponse, error)
 	WaitForParsing(ctx context.Context, uid string, pollInterval time.Duration) (*StatusResponse, error)
 }
@@ -30,6 +33,7 @@ type Converter interface {
 // Downloader handles file download operations
 type Downloader interface {
 	DownloadFile(ctx context.Context, url string) ([]byte, error)
+	DownloadFileTo(ctx context.Context, url string, dst io.Writer) error
 }
 
 // ImageParser handles image parsing operations

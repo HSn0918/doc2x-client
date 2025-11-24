@@ -106,7 +106,7 @@ func (c *client) WaitForImageLayout(ctx context.Context, uid string, pollInterva
 		return nil, ErrEmptyUID
 	}
 
-	return waitWithPolling(ctx, uid, pollInterval, "image layout", c.GetImageLayoutStatus, func(status *ImageLayoutStatusResponse) (bool, error) {
+	return waitWithPolling(ctx, uid, pollInterval, "image layout", c.processingTimeout, c.GetImageLayoutStatus, func(status *ImageLayoutStatusResponse) (bool, error) {
 		if status.Data == nil {
 			return false, nil
 		}
