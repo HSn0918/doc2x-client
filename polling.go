@@ -38,7 +38,7 @@ func withProcessingTimeout(ctx context.Context, timeout time.Duration) (context.
 }
 
 // waitWithPolling repeatedly fetches task status until completion, failure, or timeout.
-func waitWithPolling[T any](ctx context.Context, uid string, pollInterval time.Duration, operation string,
+func waitWithPolling[T any](ctx context.Context, uid string, pollInterval time.Duration, operation Operation,
 	timeout time.Duration,
 	fetch func(context.Context, string) (*T, error),
 	evaluate func(*T) (bool, error),
@@ -85,7 +85,7 @@ func waitWithPolling[T any](ctx context.Context, uid string, pollInterval time.D
 }
 
 // waitForNextPoll blocks until the next ticker pulse or context cancellation.
-func waitForNextPoll(ctx context.Context, ticker *time.Ticker, operation string) error {
+func waitForNextPoll(ctx context.Context, ticker *time.Ticker, operation Operation) error {
 	select {
 	case <-ctx.Done():
 		return fmt.Errorf("waiting for %s cancelled: %w", operation, ctx.Err())

@@ -39,11 +39,11 @@ func (c *client) UploadPDFReader(ctx context.Context, pdfReader io.Reader) (*Upl
 	result.TraceID = traceID
 
 	if !resp.IsSuccess() {
-		return nil, errStatus("upload PDF", resp.StatusCode(), resp.Status(), traceID)
+		return nil, errStatus(OperationUploadPDF, resp.StatusCode(), resp.Status(), traceID)
 	}
 
 	if err := ensureAPISuccess(result.Code, result.Msg); err != nil {
-		return nil, errCode("upload PDF", result.Code, result.Msg, traceID)
+		return nil, errCode(OperationUploadPDF, result.Code, result.Msg, traceID)
 	}
 
 	return &result, nil
@@ -65,11 +65,11 @@ func (c *client) PreUpload(ctx context.Context) (*PreUploadResponse, error) {
 	result.TraceID = traceID
 
 	if !resp.IsSuccess() {
-		return nil, errStatus("preupload", resp.StatusCode(), resp.Status(), traceID)
+		return nil, errStatus(OperationPreUpload, resp.StatusCode(), resp.Status(), traceID)
 	}
 
-	if err := ensureAPISuccess(result.Code, ""); err != nil {
-		return nil, errCode("preupload", result.Code, "", traceID)
+	if err := ensureAPISuccess(result.Code, result.Msg); err != nil {
+		return nil, errCode(OperationPreUpload, result.Code, result.Msg, traceID)
 	}
 
 	return &result, nil
@@ -98,8 +98,11 @@ func (c *client) UploadToPresignedURLFrom(ctx context.Context, url string, file 
 		return ErrNilReader
 	}
 
-	resp, err := c.transferClient.R().
+	transfer := c.transferClient()
+
+	resp, err := transfer.R().
 		SetContext(ctx).
+		SetHeader("Content-Type", "application/octet-stream").
 		SetBody(file).
 		Put(url)
 
@@ -135,11 +138,11 @@ func (c *client) GetStatus(ctx context.Context, uid string) (*StatusResponse, er
 	result.TraceID = traceID
 
 	if !resp.IsSuccess() {
-		return nil, errStatus("get status", resp.StatusCode(), resp.Status(), traceID)
+		return nil, errStatus(OperationGetStatus, resp.StatusCode(), resp.Status(), traceID)
 	}
 
 	if err := ensureAPISuccess(result.Code, result.Msg); err != nil {
-		return nil, errCode("get status", result.Code, result.Msg, traceID)
+		return nil, errCode(OperationGetStatus, result.Code, result.Msg, traceID)
 	}
 
 	return &result, nil
@@ -151,7 +154,7 @@ func (c *client) WaitForParsing(ctx context.Context, uid string, pollInterval ti
 		return nil, ErrEmptyUID
 	}
 
-	return waitWithPolling(ctx, uid, pollInterval, "parsing", c.processingTimeout, c.GetStatus, func(status *StatusResponse) (bool, error) {
+	return waitWithPolling(ctx, uid, pollInterval, OperationParsing, c.processingTimeout, c.GetStatus, func(status *StatusResponse) (bool, error) {
 		if status.Data == nil {
 			return false, nil
 		}

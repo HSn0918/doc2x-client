@@ -21,7 +21,6 @@ import (
 
 func buildClient(apiKey string, opts *cliOptions) client.Client {
 	options := []client.Option{
-		client.WithAPIKey(apiKey),
 		client.WithBaseURL(opts.baseURL),
 		client.WithTimeout(opts.timeout),
 		client.WithProcessingTimeout(opts.processingTimeout),

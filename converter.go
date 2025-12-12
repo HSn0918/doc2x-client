@@ -35,11 +35,11 @@ func (c *client) ConvertParse(ctx context.Context, req ConvertRequest) (*Convert
 	result.TraceID = traceID
 
 	if !resp.IsSuccess() {
-		return nil, errStatus("convert parse", resp.StatusCode(), resp.Status(), traceID)
+		return nil, errStatus(OperationConvertParse, resp.StatusCode(), resp.Status(), traceID)
 	}
 
 	if err := ensureAPISuccess(result.Code, result.Msg); err != nil {
-		return nil, errCode("convert parse", result.Code, result.Msg, traceID)
+		return nil, errCode(OperationConvertParse, result.Code, result.Msg, traceID)
 	}
 
 	return &result, nil
@@ -66,11 +66,11 @@ func (c *client) GetConvertResult(ctx context.Context, uid string) (*ConvertResu
 	result.TraceID = traceID
 
 	if !resp.IsSuccess() {
-		return nil, errStatus("get convert result", resp.StatusCode(), resp.Status(), traceID)
+		return nil, errStatus(OperationGetConvertResult, resp.StatusCode(), resp.Status(), traceID)
 	}
 
 	if err := ensureAPISuccess(result.Code, result.Msg); err != nil {
-		return nil, errCode("get convert result", result.Code, result.Msg, traceID)
+		return nil, errCode(OperationGetConvertResult, result.Code, result.Msg, traceID)
 	}
 
 	return &result, nil
@@ -82,7 +82,7 @@ func (c *client) WaitForConversion(ctx context.Context, uid string, pollInterval
 		return nil, ErrEmptyUID
 	}
 
-	return waitWithPolling(ctx, uid, pollInterval, "conversion", c.processingTimeout, c.GetConvertResult, func(result *ConvertResultResponse) (bool, error) {
+	return waitWithPolling(ctx, uid, pollInterval, OperationConversion, c.processingTimeout, c.GetConvertResult, func(result *ConvertResultResponse) (bool, error) {
 		switch result.Data.Status {
 		case ConvertStatusSuccess:
 			if result.Data.URL == "" {

@@ -18,7 +18,7 @@ var (
 )
 
 // errCode formats a failure message when the API reports a non-success code.
-func errCode(operation, code, msg, traceID string) error {
+func errCode(operation Operation, code, msg, traceID string) error {
 	traceID = normalizeTraceID(traceID)
 	if msg == "" {
 		return fmt.Errorf("%s failed with code %s (trace-id: %s)", operation, code, traceID)
@@ -27,7 +27,7 @@ func errCode(operation, code, msg, traceID string) error {
 }
 
 // errStatus formats an error with HTTP status and trace id.
-func errStatus(operation string, statusCode int, status, traceID string) error {
+func errStatus(operation Operation, statusCode int, status, traceID string) error {
 	traceID = normalizeTraceID(traceID)
 	return fmt.Errorf("%s failed with status %d: %s (trace-id: %s)", operation, statusCode, status, traceID)
 }

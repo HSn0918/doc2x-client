@@ -1,6 +1,7 @@
 package client
 
 import (
+	"net/http"
 	"time"
 
 	"github.com/go-resty/resty/v2"
@@ -8,8 +9,6 @@ import (
 
 type client struct {
 	restyClient       *resty.Client
-	transferClient    *resty.Client
-	apiKey            string
 	processingTimeout time.Duration
 }
 
@@ -36,11 +35,9 @@ func WithTimeout(timeout time.Duration) Option {
 }
 
 // WithAPIKey assigns the API key that will be sent in the Authorization header.
-// The key is shared with both the main and transfer clients.
 func WithAPIKey(apiKey string) Option {
 	return func(c *client) {
-		c.apiKey = apiKey
-		c.restyClient.SetHeader("Authorization", "Bearer "+apiKey)
+		setAuthHeader(c.restyClient, apiKey)
 	}
 }
 
@@ -48,16 +45,10 @@ func WithAPIKey(apiKey string) Option {
 func WithRestyClient(restyClient *resty.Client) Option {
 	return func(c *client) {
 		if restyClient != nil {
+			if auth := c.restyClient.Header.Get("Authorization"); auth != "" {
+				restyClient.SetHeader("Authorization", auth)
+			}
 			c.restyClient = restyClient
-		}
-	}
-}
-
-// WithTransferClient overrides the client used for uploads/downloads to OSS/pre-signed URLs.
-func WithTransferClient(transfer *resty.Client) Option {
-	return func(c *client) {
-		if transfer != nil {
-			c.transferClient = transfer
 		}
 	}
 }
@@ -67,20 +58,19 @@ func WithProcessingTimeout(timeout time.Duration) Option {
 	return func(c *client) {
 		if timeout > 0 {
 			c.processingTimeout = timeout
-			if c.transferClient != nil {
-				c.transferClient.SetTimeout(timeout)
+			if c.restyClient != nil {
+				c.restyClient.SetTimeout(timeout)
 			}
 		}
 	}
 }
 
 // NewClient creates a configured client that can speak to the doc2x service.
-// Options allow overriding the base API client, transfer client, and processing timeout.
+// Options allow overriding the base API client and processing timeout.
 func NewClient(apiKey string, opts ...Option) Client {
 	c := &client{
 		restyClient:       newDefaultAPIClient(),
 		processingTimeout: ProcessingTimeout,
-		apiKey:            apiKey,
 	}
 
 	for _, opt := range opts {
@@ -91,9 +81,7 @@ func NewClient(apiKey string, opts ...Option) Client {
 		c.restyClient = newDefaultAPIClient()
 	}
 
-	if c.transferClient == nil {
-		c.transferClient = newTransferClient(c.processingTimeout)
-	}
+	setAuthHeader(c.restyClient, apiKey)
 
 	return c
 }
@@ -119,13 +107,39 @@ func newDefaultAPIClient() *resty.Client {
 		SetRetryMaxWaitTime(5 * time.Second)
 }
 
+func setAuthHeader(restyClient *resty.Client, apiKey string) {
+	if apiKey == "" || restyClient == nil {
+		return
+	}
+	restyClient.SetHeader("Authorization", "Bearer "+apiKey)
+}
+
+func (c *client) transferClient() *resty.Client {
+	timeout := c.processingTimeout
+	if timeout <= 0 {
+		timeout = ProcessingTimeout
+	}
+
+	if c.restyClient == nil {
+		return newTransferClient(timeout, nil)
+	}
+
+	baseHTTP := *c.restyClient.GetClient()
+	baseHTTP.Timeout = timeout
+
+	return newTransferClient(timeout, &baseHTTP)
+}
+
 // newTransferClient builds an HTTP client tailored for transfer operations with the given timeout.
-func newTransferClient(timeout time.Duration) *resty.Client {
-	client := resty.New().
+func newTransferClient(timeout time.Duration, httpClient *http.Client) *resty.Client {
+	client := resty.New()
+	if httpClient != nil {
+		client = resty.NewWithClient(httpClient)
+	}
+
+	return client.
 		SetTimeout(timeout).
 		SetRetryCount(3).
 		SetRetryWaitTime(1 * time.Second).
 		SetRetryMaxWaitTime(5 * time.Second)
-
-	return client
 }

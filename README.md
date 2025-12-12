@@ -15,7 +15,7 @@ go get github.com/hsn0918/doc2x-client
 ## 快速上手
 
 ```go
-c := client.NewClient(client.WithAPIKey("sk-xxx"))
+c := client.NewClient("sk-xxx")
 ctx := context.Background()
 
 pre, _ := c.PreUpload(ctx)

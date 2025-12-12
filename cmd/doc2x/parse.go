@@ -197,13 +197,14 @@ func collectInputFiles(p string) ([]string, error) {
 func handleParseFile(ctx context.Context, cmd *cobra.Command, cli client.Client, pdf string, job parseJobConfig) error {
 	fileLabel := filepath.Base(pdf)
 
-	fileData, err := os.ReadFile(pdf)
+	file, err := os.Open(pdf)
 	if err != nil {
 		if logErr := logFailure(job.failLog, "", pdf, err); logErr != nil {
 			return fmt.Errorf("%w; also failed to write fail log: %v", err, logErr)
 		}
-		return fmt.Errorf("read file %s: %w", pdf, err)
+		return fmt.Errorf("open file %s: %w", pdf, err)
 	}
+	defer file.Close()
 
 	preUpload, err := cli.PreUpload(ctx)
 	if err != nil {
@@ -220,7 +221,7 @@ func handleParseFile(ctx context.Context, cmd *cobra.Command, cli client.Client,
 		return err
 	}
 
-	if err := cli.UploadToPresignedURL(ctx, preUpload.Data.URL, fileData); err != nil {
+	if err := cli.UploadToPresignedURLFrom(ctx, preUpload.Data.URL, file); err != nil {
 		if logErr := logFailure(job.failLog, preUpload.TraceID, pdf, err); logErr != nil {
 			return fmt.Errorf("%w; also failed to write fail log: %v", err, logErr)
 		}

@@ -28,11 +28,11 @@ func (c *client) ParseImageLayout(ctx context.Context, imageData []byte) (*Image
 	result.TraceID = traceID
 
 	if !resp.IsSuccess() {
-		return nil, errStatus("parse image layout", resp.StatusCode(), resp.Status(), traceID)
+		return nil, errStatus(OperationParseImageLayout, resp.StatusCode(), resp.Status(), traceID)
 	}
 
 	if err := ensureAPISuccess(result.Code, result.Msg); err != nil {
-		return nil, errCode("parse image layout", result.Code, result.Msg, traceID)
+		return nil, errCode(OperationParseImageLayout, result.Code, result.Msg, traceID)
 	}
 
 	if result.Data == nil {
@@ -64,11 +64,11 @@ func (c *client) AsyncParseImageLayout(ctx context.Context, imageData []byte) (*
 	result.TraceID = traceID
 
 	if !resp.IsSuccess() {
-		return nil, errStatus("async parse image layout", resp.StatusCode(), resp.Status(), traceID)
+		return nil, errStatus(OperationAsyncParseImageLayout, resp.StatusCode(), resp.Status(), traceID)
 	}
 
 	if err := ensureAPISuccess(result.Code, result.Msg); err != nil {
-		return nil, errCode("async parse image layout", result.Code, result.Msg, traceID)
+		return nil, errCode(OperationAsyncParseImageLayout, result.Code, result.Msg, traceID)
 	}
 
 	if result.Data == nil {
@@ -99,11 +99,11 @@ func (c *client) GetImageLayoutStatus(ctx context.Context, uid string) (*ImageLa
 	result.TraceID = traceID
 
 	if !resp.IsSuccess() {
-		return nil, errStatus("get image layout status", resp.StatusCode(), resp.Status(), traceID)
+		return nil, errStatus(OperationGetImageLayoutStatus, resp.StatusCode(), resp.Status(), traceID)
 	}
 
 	if err := ensureAPISuccess(result.Code, result.Msg); err != nil {
-		return nil, errCode("get image layout status", result.Code, result.Msg, traceID)
+		return nil, errCode(OperationGetImageLayoutStatus, result.Code, result.Msg, traceID)
 	}
 
 	return &result, nil
@@ -115,7 +115,7 @@ func (c *client) WaitForImageLayout(ctx context.Context, uid string, pollInterva
 		return nil, ErrEmptyUID
 	}
 
-	return waitWithPolling(ctx, uid, pollInterval, "image layout", c.processingTimeout, c.GetImageLayoutStatus, func(status *ImageLayoutStatusResponse) (bool, error) {
+	return waitWithPolling(ctx, uid, pollInterval, OperationImageLayout, c.processingTimeout, c.GetImageLayoutStatus, func(status *ImageLayoutStatusResponse) (bool, error) {
 		if status.Data == nil {
 			return false, nil
 		}

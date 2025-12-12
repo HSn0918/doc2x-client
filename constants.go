@@ -5,7 +5,7 @@ import "time"
 const (
 	ServiceName       = "doc2x"
 	DefaultBaseURL    = "https://v2.doc2x.noedgeai.com"
-	DefaultTimeout    = 30 * time.Second
+	DefaultTimeout    = 5 * time.Minute
 	ProcessingTimeout = 5 * time.Minute
 	APIVersion        = "v2"
 	TraceIDHeader     = "trace-id"

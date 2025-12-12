@@ -37,6 +37,23 @@ const (
 	ConvertStatusFailed     ConvertStatus = "failed"
 )
 
+// Operation enumerates named long-running tasks for polling.
+type Operation string
+
+const (
+	OperationParsing               Operation = "parsing"
+	OperationConversion            Operation = "conversion"
+	OperationImageLayout           Operation = "image layout"
+	OperationUploadPDF             Operation = "upload PDF"
+	OperationPreUpload             Operation = "preupload"
+	OperationGetStatus             Operation = "get status"
+	OperationConvertParse          Operation = "convert parse"
+	OperationGetConvertResult      Operation = "get convert result"
+	OperationParseImageLayout      Operation = "parse image layout"
+	OperationAsyncParseImageLayout Operation = "async parse image layout"
+	OperationGetImageLayoutStatus  Operation = "get image layout status"
+)
+
 // UploadResponse represents the response from direct PDF upload
 type UploadResponse struct {
 	TraceID string `json:"-"`

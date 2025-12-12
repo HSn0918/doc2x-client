@@ -38,7 +38,9 @@ func (c *client) DownloadFileTo(ctx context.Context, url string, dst io.Writer) 
 
 	url = strings.ReplaceAll(url, "\\u0026", "&")
 
-	resp, err := c.transferClient.R().
+	transfer := c.transferClient()
+
+	resp, err := transfer.R().
 		SetContext(ctx).
 		SetDoNotParseResponse(true).
 		Get(url)
