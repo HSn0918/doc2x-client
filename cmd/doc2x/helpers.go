@@ -121,26 +121,26 @@ func downloadToFile(ctx context.Context, cli client.Client, downloadURL, targetP
 	return nil
 }
 
-func printOut(cmd *cobra.Command, format string, args ...any) error {
-	return logWith(cmd, slog.LevelInfo, "info", "", format, args...)
+func printOut(cmd *cobra.Command, msg string, attrs ...slog.Attr) error {
+	return logWith(cmd, slog.LevelInfo, "", msg, attrs...)
 }
 
-func printWithTrace(cmd *cobra.Command, level string, traceID string, format string, args ...any) error {
-	lvl := slog.LevelInfo
-	if strings.ToLower(level) == "error" {
-		lvl = slog.LevelError
-	}
-	return logWith(cmd, lvl, level, traceID, format, args...)
+func printWithTrace(cmd *cobra.Command, level slog.Level, traceID string, msg string, attrs ...slog.Attr) error {
+	return logWith(cmd, level, traceID, msg, attrs...)
 }
 
-func logWith(cmd *cobra.Command, level slog.Level, levelName string, traceID string, format string, args ...any) error {
+func logWith(cmd *cobra.Command, level slog.Level, traceID string, msg string, attrs ...slog.Attr) error {
 	logger := newLogger(cmd.OutOrStdout(), level)
-	msg := strings.TrimSuffix(fmt.Sprintf(format, args...), "\n")
-	attrs := []slog.Attr{slog.Time("ts", time.Now())}
+	message := strings.TrimSuffix(msg, "\n")
+
+	allAttrs := make([]slog.Attr, 0, len(attrs)+2)
+	allAttrs = append(allAttrs, slog.Time("ts", time.Now()))
 	if traceID != "" {
-		attrs = append(attrs, slog.String("trace-id", traceID))
+		allAttrs = append(allAttrs, slog.String("trace-id", traceID))
 	}
-	logger.LogAttrs(cmd.Context(), level, msg, attrs...)
+	allAttrs = append(allAttrs, attrs...)
+
+	logger.LogAttrs(cmd.Context(), level, message, allAttrs...)
 	return nil
 }
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -25,7 +26,22 @@ func newParseCmd(opts *cliOptions) *cobra.Command {
 		Use:   "parse",
 		Short: "Upload and parse a PDF (single file or directory)",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return po.run(cmd)
+			if err := po.Complete(); err != nil {
+				target := po.inputPath
+				if target == "" {
+					target = po.filePath
+				}
+				if logErr := logFailure(po.opts.failLogPath, "", target, err); logErr != nil {
+					return fmt.Errorf("%w; also failed to write fail log: %v", err, logErr)
+				}
+				return err
+			}
+
+			if err := po.Validate(); err != nil {
+				return err
+			}
+
+			return po.Run(cmd)
 		},
 	}
 
@@ -84,7 +100,7 @@ func (o *parseOptions) addFlags(cmd *cobra.Command) {
 	cmd.Flags().StringVar(&o.auto.output, "convert-output", "", "Override download path for auto conversion (defaults to UID-based name under download-dir)")
 }
 
-func (o *parseOptions) complete() error {
+func (o *parseOptions) Complete() error {
 	if o.filePath == "" && o.inputPath == "" {
 		return errors.New("flag --file or --path is required")
 	}
@@ -107,24 +123,14 @@ func (o *parseOptions) complete() error {
 	return nil
 }
 
-func (o *parseOptions) validate() error {
+func (o *parseOptions) Validate() error {
 	if len(o.files) == 0 {
 		return fmt.Errorf("no pdf files found in %s", o.inputPath)
 	}
 	return nil
 }
 
-func (o *parseOptions) run(cmd *cobra.Command) error {
-	if err := o.complete(); err != nil {
-		if logErr := logFailure(o.opts.failLogPath, "", o.inputPath, err); logErr != nil {
-			return fmt.Errorf("%w; also failed to write fail log: %v", err, logErr)
-		}
-		return err
-	}
-	if err := o.validate(); err != nil {
-		return err
-	}
-
+func (o *parseOptions) Run(cmd *cobra.Command) error {
 	apiKey, err := resolveAPIKey(o.opts)
 	if err != nil {
 		if logErr := logFailure(o.opts.failLogPath, "", "", err); logErr != nil {
@@ -134,7 +140,7 @@ func (o *parseOptions) run(cmd *cobra.Command) error {
 	}
 	o.apiKey = apiKey
 
-	cli := buildClient(apiKey, o.opts)
+	cli := buildClient(o.apiKey, o.opts)
 	ctx := cmd.Context()
 
 	jobCfg := parseJobConfig{
@@ -189,6 +195,8 @@ func collectInputFiles(p string) ([]string, error) {
 }
 
 func handleParseFile(ctx context.Context, cmd *cobra.Command, cli client.Client, pdf string, job parseJobConfig) error {
+	fileLabel := filepath.Base(pdf)
+
 	fileData, err := os.ReadFile(pdf)
 	if err != nil {
 		if logErr := logFailure(job.failLog, "", pdf, err); logErr != nil {
@@ -205,7 +213,10 @@ func handleParseFile(ctx context.Context, cmd *cobra.Command, cli client.Client,
 		return fmt.Errorf("preupload failed for %s: %w", pdf, err)
 	}
 
-	if err := printWithTrace(cmd, "info", preUpload.TraceID, "[%s] Preupload OK uid=%s\n", filepath.Base(pdf), preUpload.Data.UID); err != nil {
+	if err := printWithTrace(cmd, slog.LevelInfo, preUpload.TraceID, "Preupload completed",
+		slog.String("file", fileLabel),
+		slog.String("uid", preUpload.Data.UID),
+	); err != nil {
 		return err
 	}
 
@@ -213,15 +224,20 @@ func handleParseFile(ctx context.Context, cmd *cobra.Command, cli client.Client,
 		if logErr := logFailure(job.failLog, preUpload.TraceID, pdf, err); logErr != nil {
 			return fmt.Errorf("%w; also failed to write fail log: %v", err, logErr)
 		}
-		return fmt.Errorf("[%s] upload failed (trace-id: %s): %w", filepath.Base(pdf), preUpload.TraceID, err)
+		return fmt.Errorf("[%s] upload failed (trace-id: %s): %w", fileLabel, preUpload.TraceID, err)
 	}
 
-	if err := printWithTrace(cmd, "info", preUpload.TraceID, "[%s] Upload success\n", filepath.Base(pdf)); err != nil {
+	if err := printWithTrace(cmd, slog.LevelInfo, preUpload.TraceID, "Upload success",
+		slog.String("file", fileLabel),
+	); err != nil {
 		return err
 	}
 
 	if !job.wait {
-		return printWithTrace(cmd, "info", preUpload.TraceID, "[%s] Submitted parse job uid=%s\n", filepath.Base(pdf), preUpload.Data.UID)
+		return printWithTrace(cmd, slog.LevelInfo, preUpload.TraceID, "Submitted parse job",
+			slog.String("file", fileLabel),
+			slog.String("uid", preUpload.Data.UID),
+		)
 	}
 
 	status, err := cli.WaitForParsing(ctx, preUpload.Data.UID, job.interval)
@@ -237,7 +253,10 @@ func handleParseFile(ctx context.Context, cmd *cobra.Command, cli client.Client,
 		if logErr := logFailure(job.failLog, status.TraceID, pdf, msgErr); logErr != nil {
 			return fmt.Errorf("%w; also failed to write fail log: %v", msgErr, logErr)
 		}
-		return printWithTrace(cmd, "error", status.TraceID, "[%s] Parse finished uid=%s, but no data returned\n", filepath.Base(pdf), preUpload.Data.UID)
+		return printWithTrace(cmd, slog.LevelError, status.TraceID, "Parse finished without data",
+			slog.String("file", fileLabel),
+			slog.String("uid", preUpload.Data.UID),
+		)
 	}
 
 	pageCount := 0
@@ -245,7 +264,11 @@ func handleParseFile(ctx context.Context, cmd *cobra.Command, cli client.Client,
 		pageCount = len(status.Data.Result.Pages)
 	}
 
-	if err := printWithTrace(cmd, "info", status.TraceID, "[%s] Parse success uid=%s pages=%d\n", filepath.Base(pdf), preUpload.Data.UID, pageCount); err != nil {
+	if err := printWithTrace(cmd, slog.LevelInfo, status.TraceID, "Parse success",
+		slog.String("file", fileLabel),
+		slog.String("uid", preUpload.Data.UID),
+		slog.Int("pages", pageCount),
+	); err != nil {
 		return err
 	}
 
@@ -267,7 +290,10 @@ func handleParseFile(ctx context.Context, cmd *cobra.Command, cli client.Client,
 			}
 			return err
 		}
-		if err := printWithTrace(cmd, "info", status.TraceID, "[%s] Saved result to %s\n", filepath.Base(pdf), target); err != nil {
+		if err := printWithTrace(cmd, slog.LevelInfo, status.TraceID, "Saved parse result",
+			slog.String("file", fileLabel),
+			slog.String("path", target),
+		); err != nil {
 			return err
 		}
 	}
@@ -353,7 +379,11 @@ func autoConvertAndDownload(ctx context.Context, cmd *cobra.Command, cli client.
 		return err
 	}
 
-	if err := printWithTrace(cmd, "info", resp.TraceID, "[%s] Convert requested uid=%s status=%s\n", label, uid, resp.Data.Status); err != nil {
+	if err := printWithTrace(cmd, slog.LevelInfo, resp.TraceID, "Convert requested",
+		slog.String("file", label),
+		slog.String("uid", uid),
+		slog.String("status", string(resp.Data.Status)),
+	); err != nil {
 		return err
 	}
 
@@ -365,7 +395,12 @@ func autoConvertAndDownload(ctx context.Context, cmd *cobra.Command, cli client.
 		return err
 	}
 
-	if err := printWithTrace(cmd, "info", result.TraceID, "[%s] Conversion %s uid=%s url=%s\n", label, result.Data.Status, uid, result.Data.URL); err != nil {
+	if err := printWithTrace(cmd, slog.LevelInfo, result.TraceID, "Conversion finished",
+		slog.String("file", label),
+		slog.String("status", string(result.Data.Status)),
+		slog.String("uid", uid),
+		slog.String("url", result.Data.URL),
+	); err != nil {
 		return err
 	}
 
@@ -376,7 +411,10 @@ func autoConvertAndDownload(ctx context.Context, cmd *cobra.Command, cli client.
 			}
 			return err
 		}
-		return printWithTrace(cmd, "info", result.TraceID, "[%s] Downloaded converted file to %s\n", label, cfg.output)
+		return printWithTrace(cmd, slog.LevelInfo, result.TraceID, "Downloaded converted file",
+			slog.String("file", label),
+			slog.String("path", cfg.output),
+		)
 	}
 
 	downloadDir := cfg.downloadDir
@@ -392,5 +430,8 @@ func autoConvertAndDownload(ctx context.Context, cmd *cobra.Command, cli client.
 		return err
 	}
 
-	return printWithTrace(cmd, "info", result.TraceID, "[%s] Downloaded converted file to %s\n", label, outPath)
+	return printWithTrace(cmd, slog.LevelInfo, result.TraceID, "Downloaded converted file",
+		slog.String("file", label),
+		slog.String("path", outPath),
+	)
 }

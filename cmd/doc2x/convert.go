@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -19,7 +20,18 @@ func newConvertCmd(opts *cliOptions) *cobra.Command {
 		Use:   "convert",
 		Short: "Trigger conversion for a parsed document",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return co.run(cmd)
+			if err := co.Complete(); err != nil {
+				if logErr := logFailure(co.opts.failLogPath, "", co.uid, err); logErr != nil {
+					return fmt.Errorf("%w; also failed to write fail log: %v", err, logErr)
+				}
+				return err
+			}
+
+			if err := co.Validate(); err != nil {
+				return err
+			}
+
+			return co.Run(cmd)
 		},
 	}
 
@@ -56,11 +68,7 @@ func (o *convertOptions) addFlags(cmd *cobra.Command) {
 	cmd.Flags().StringVarP(&o.output, "output", "o", "", "Download path (used when --download is set)")
 }
 
-func (o *convertOptions) complete() error {
-	if o.uid == "" {
-		return errors.New("flag --uid is required")
-	}
-
+func (o *convertOptions) Complete() error {
 	format, err := parseConvertFormat(o.to)
 	if err != nil {
 		return err
@@ -80,14 +88,14 @@ func (o *convertOptions) complete() error {
 	return nil
 }
 
-func (o *convertOptions) run(cmd *cobra.Command) error {
-	if err := o.complete(); err != nil {
-		if logErr := logFailure(o.opts.failLogPath, "", o.uid, err); logErr != nil {
-			return fmt.Errorf("%w; also failed to write fail log: %v", err, logErr)
-		}
-		return err
+func (o *convertOptions) Validate() error {
+	if o.uid == "" {
+		return errors.New("flag --uid is required")
 	}
+	return nil
+}
 
+func (o *convertOptions) Run(cmd *cobra.Command) error {
 	apiKey, err := resolveAPIKey(o.opts)
 	if err != nil {
 		if logErr := logFailure(o.opts.failLogPath, "", o.uid, err); logErr != nil {
@@ -97,7 +105,7 @@ func (o *convertOptions) run(cmd *cobra.Command) error {
 	}
 	o.apiKey = apiKey
 
-	cli := buildClient(apiKey, o.opts)
+	cli := buildClient(o.apiKey, o.opts)
 	ctx := cmd.Context()
 
 	req := client.ConvertRequest{
@@ -116,7 +124,10 @@ func (o *convertOptions) run(cmd *cobra.Command) error {
 		return err
 	}
 
-	if err := printWithTrace(cmd, "info", resp.TraceID, "Convert requested uid=%s status=%s\n", o.uid, resp.Data.Status); err != nil {
+	if err := printWithTrace(cmd, slog.LevelInfo, resp.TraceID, "Convert requested",
+		slog.String("uid", o.uid),
+		slog.String("status", string(resp.Data.Status)),
+	); err != nil {
 		return err
 	}
 
@@ -132,7 +143,11 @@ func (o *convertOptions) run(cmd *cobra.Command) error {
 		return err
 	}
 
-	if err := printWithTrace(cmd, "info", result.TraceID, "Conversion %s uid=%s url=%s\n", result.Data.Status, o.uid, result.Data.URL); err != nil {
+	if err := printWithTrace(cmd, slog.LevelInfo, result.TraceID, "Conversion finished",
+		slog.String("status", string(result.Data.Status)),
+		slog.String("uid", o.uid),
+		slog.String("url", result.Data.URL),
+	); err != nil {
 		return err
 	}
 
@@ -149,7 +164,9 @@ func (o *convertOptions) run(cmd *cobra.Command) error {
 			return err
 		}
 
-		if err := printWithTrace(cmd, "info", result.TraceID, "Downloaded to %s\n", outPath); err != nil {
+		if err := printWithTrace(cmd, slog.LevelInfo, result.TraceID, "Downloaded converted file",
+			slog.String("path", outPath),
+		); err != nil {
 			return err
 		}
 	}
