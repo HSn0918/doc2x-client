@@ -3,3 +3,8 @@
 ./.idea
 *_test.go
 *.pdf
+/.idea
+/bin
+/scripts
+/tmp
+.gocache
