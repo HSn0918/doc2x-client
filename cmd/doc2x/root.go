@@ -24,6 +24,9 @@ func newRootCmd() *cobra.Command {
 		Short:         "Doc2X API v2 CLI helper",
 		SilenceUsage:  true,
 		SilenceErrors: true,
+		CompletionOptions: cobra.CompletionOptions{
+			DisableDefaultCmd: true,
+		},
 	}
 
 	cmd.PersistentFlags().StringVar(&opts.apiKey, "api-key", "", "Doc2X API key (or set DOC2X_APIKEY / DOC2X_API_KEY)")

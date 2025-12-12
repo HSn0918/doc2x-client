@@ -17,8 +17,9 @@ func newConvertCmd(opts *cliOptions) *cobra.Command {
 	}
 
 	cmd := &cobra.Command{
-		Use:   "convert",
-		Short: "Trigger conversion for a parsed document",
+		Use:               "convert",
+		Short:             "Trigger conversion for a parsed document",
+		ValidArgsFunction: positionalAlwaysFlags,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := co.Complete(); err != nil {
 				if logErr := logFailure(co.opts.failLogPath, "", co.uid, err); logErr != nil {

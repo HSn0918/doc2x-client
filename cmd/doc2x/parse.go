@@ -23,8 +23,9 @@ func newParseCmd(opts *cliOptions) *cobra.Command {
 	}
 
 	cmd := &cobra.Command{
-		Use:   "parse",
-		Short: "Upload and parse a PDF (single file or directory)",
+		Use:               "parse",
+		Short:             "Upload and parse a PDF (single file or directory)",
+		ValidArgsFunction: positionalAlwaysFlags,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := po.Complete(); err != nil {
 				target := po.inputPath
