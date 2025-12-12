@@ -17,7 +17,7 @@ func (c *client) ConvertParse(ctx context.Context, req ConvertRequest) (*Convert
 	}
 
 	if req.FormulaMode == "" {
-		req.FormulaMode = "latex"
+		req.FormulaMode = FormulaModeNormal
 	}
 
 	var result ConvertResponse
@@ -31,12 +31,15 @@ func (c *client) ConvertParse(ctx context.Context, req ConvertRequest) (*Convert
 		return nil, fmt.Errorf("convert parse for UID %s failed: %w", req.UID, err)
 	}
 
+	traceID := resp.Header().Get(TraceIDHeader)
+	result.TraceID = traceID
+
 	if !resp.IsSuccess() {
-		return nil, fmt.Errorf("convert parse failed with status %d: %s", resp.StatusCode(), resp.Status())
+		return nil, errStatus("convert parse", resp.StatusCode(), resp.Status(), traceID)
 	}
 
 	if err := ensureAPISuccess(result.Code, result.Msg); err != nil {
-		return nil, errCode("convert parse", result.Code, result.Msg)
+		return nil, errCode("convert parse", result.Code, result.Msg, traceID)
 	}
 
 	return &result, nil
@@ -59,12 +62,15 @@ func (c *client) GetConvertResult(ctx context.Context, uid string) (*ConvertResu
 		return nil, fmt.Errorf("get convert result for UID %s failed: %w", uid, err)
 	}
 
+	traceID := resp.Header().Get(TraceIDHeader)
+	result.TraceID = traceID
+
 	if !resp.IsSuccess() {
-		return nil, fmt.Errorf("get convert result failed with status %d: %s", resp.StatusCode(), resp.Status())
+		return nil, errStatus("get convert result", resp.StatusCode(), resp.Status(), traceID)
 	}
 
 	if err := ensureAPISuccess(result.Code, result.Msg); err != nil {
-		return nil, errCode("get convert result", result.Code, result.Msg)
+		return nil, errCode("get convert result", result.Code, result.Msg, traceID)
 	}
 
 	return &result, nil
@@ -78,13 +84,13 @@ func (c *client) WaitForConversion(ctx context.Context, uid string, pollInterval
 
 	return waitWithPolling(ctx, uid, pollInterval, "conversion", c.processingTimeout, c.GetConvertResult, func(result *ConvertResultResponse) (bool, error) {
 		switch result.Data.Status {
-		case StatusSuccess:
+		case ConvertStatusSuccess:
 			if result.Data.URL == "" {
 				return false, fmt.Errorf("conversion succeeded but no download URL provided")
 			}
 			return true, nil
-		case StatusFailed:
-			return false, fmt.Errorf("conversion failed for UID: %s", uid)
+		case ConvertStatusFailed:
+			return false, fmt.Errorf("conversion failed for UID %s (trace-id: %s)", uid, result.TraceID)
 		default:
 			return false, nil
 		}

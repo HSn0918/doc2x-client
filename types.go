@@ -1,10 +1,48 @@
 package client
 
+// ConvertFormat enumerates supported conversion targets.
+type ConvertFormat string
+
+const (
+	FormatMarkdown ConvertFormat = "md"
+	FormatTex      ConvertFormat = "tex"
+	FormatDocx     ConvertFormat = "docx"
+	FormatMDDollar ConvertFormat = "md_dollar"
+)
+
+// FormulaMode enumerates available formula rendering modes.
+type FormulaMode string
+
+const (
+	FormulaModeNormal FormulaMode = "normal"
+	FormulaModeDollar FormulaMode = "dollar"
+	FormulaModeLatex  FormulaMode = "latex"
+)
+
+// ParseStatus enumerates parse task states.
+type ParseStatus string
+
+const (
+	ParseStatusProcessing ParseStatus = "processing"
+	ParseStatusSuccess    ParseStatus = "success"
+	ParseStatusFailed     ParseStatus = "failed"
+)
+
+// ConvertStatus enumerates conversion task states.
+type ConvertStatus string
+
+const (
+	ConvertStatusProcessing ConvertStatus = "processing"
+	ConvertStatusSuccess    ConvertStatus = "success"
+	ConvertStatusFailed     ConvertStatus = "failed"
+)
+
 // UploadResponse represents the response from direct PDF upload
 type UploadResponse struct {
-	Code string `json:"code"`          // Response status code, "success" on successful upload
-	Msg  string `json:"msg,omitempty"` // Optional server message
-	Data struct {
+	TraceID string `json:"-"`
+	Code    string `json:"code"`          // Response status code, "success" on successful upload
+	Msg     string `json:"msg,omitempty"` // Optional server message
+	Data    struct {
 		UID string `json:"uid"` // Unique document identifier for tracking and subsequent operations
 	} `json:"data"`
 }
@@ -12,9 +50,10 @@ type UploadResponse struct {
 // PreUploadResponse represents the response from preupload request
 // Used to obtain presigned URLs for large file uploads
 type PreUploadResponse struct {
-	Code string `json:"code"`          // Response status code, "success" on successful request
-	Msg  string `json:"msg,omitempty"` // Optional server message
-	Data struct {
+	TraceID string `json:"-"`
+	Code    string `json:"code"`          // Response status code, "success" on successful request
+	Msg     string `json:"msg,omitempty"` // Optional server message
+	Data    struct {
 		UID string `json:"uid"` // Unique document identifier
 		URL string `json:"url"` // Presigned upload URL for direct file upload
 	} `json:"data"`
@@ -22,12 +61,13 @@ type PreUploadResponse struct {
 
 // StatusResponse represents the document parsing status response
 type StatusResponse struct {
-	Code string `json:"code"`          // Response status code, "success" on successful request
-	Msg  string `json:"msg,omitempty"` // Error message, only present on failure
-	Data *struct {
-		Progress int    `json:"progress"` // Parsing progress percentage (0-100)
-		Status   string `json:"status"`   // Parsing status: "processing", "success", or "failed"
-		Detail   string `json:"detail"`   // Detailed status description or error message
+	TraceID string `json:"-"`
+	Code    string `json:"code"`          // Response status code, "success" on successful request
+	Msg     string `json:"msg,omitempty"` // Error message, only present on failure
+	Data    *struct {
+		Progress int         `json:"progress"` // Parsing progress percentage (0-100)
+		Status   ParseStatus `json:"status"`   // Parsing status: "processing", "success", or "failed"
+		Detail   string      `json:"detail"`   // Detailed status description or error message
 		Result   *struct {
 			Version string `json:"version"` // Parser engine version
 			Pages   []struct {
@@ -43,30 +83,32 @@ type StatusResponse struct {
 
 // ConvertRequest represents a document conversion request
 type ConvertRequest struct {
-	UID                 string `json:"uid"`                              // Document unique identifier from upload response
-	To                  string `json:"to"`                               // Target format: "markdown", "html", "docx", etc.
-	FormulaMode         string `json:"formula_mode"`                     // Formula rendering mode: "latex", "mathml", "image"
-	Filename            string `json:"filename,omitempty"`               // Output filename (optional)
-	MergeCrossPageForms bool   `json:"merge_cross_page_forms,omitempty"` // Whether to merge tables across pages (optional)
+	UID                 string        `json:"uid"`                              // Document unique identifier from upload response
+	To                  ConvertFormat `json:"to"`                               // Target format: "md", "tex", "docx", etc.
+	FormulaMode         FormulaMode   `json:"formula_mode"`                     // Formula rendering mode: "normal", "dollar"
+	Filename            string        `json:"filename,omitempty"`               // Output filename (optional)
+	MergeCrossPageForms bool          `json:"merge_cross_page_forms,omitempty"` // Whether to merge tables across pages (optional)
 }
 
 // ConvertResponse represents the document conversion response
 type ConvertResponse struct {
-	Code string `json:"code"` // Response status code, "success" on successful request
-	Msg  string `json:"msg,omitempty"`
-	Data struct {
-		Status string `json:"status"` // Conversion status: "processing", "success", or "failed"
-		URL    string `json:"url"`    // Download URL for converted file (available when conversion is complete)
+	TraceID string `json:"-"`
+	Code    string `json:"code"` // Response status code, "success" on successful request
+	Msg     string `json:"msg,omitempty"`
+	Data    struct {
+		Status ConvertStatus `json:"status"` // Conversion status: "processing", "success", or "failed"
+		URL    string        `json:"url"`    // Download URL for converted file (available when conversion is complete)
 	} `json:"data"`
 }
 
 // ConvertResultResponse represents the conversion result query response
 type ConvertResultResponse struct {
-	Code string `json:"code"` // Response status code, "success" on successful request
-	Msg  string `json:"msg,omitempty"`
-	Data struct {
-		Status string `json:"status"` // Conversion status: "processing", "success", or "failed"
-		URL    string `json:"url"`    // Download URL for the converted file
+	TraceID string `json:"-"`
+	Code    string `json:"code"` // Response status code, "success" on successful request
+	Msg     string `json:"msg,omitempty"`
+	Data    struct {
+		Status ConvertStatus `json:"status"` // Conversion status: "processing", "success", or "failed"
+		URL    string        `json:"url"`    // Download URL for the converted file
 	} `json:"data"`
 }
 
@@ -86,9 +128,10 @@ type ImageLayoutResult struct {
 
 // ImageLayoutSyncResponse represents the synchronous image layout parse response.
 type ImageLayoutSyncResponse struct {
-	Code string `json:"code"`
-	Msg  string `json:"msg,omitempty"`
-	Data *struct {
+	TraceID string `json:"-"`
+	Code    string `json:"code"`
+	Msg     string `json:"msg,omitempty"`
+	Data    *struct {
 		ConvertZIP string             `json:"convert_zip"`
 		Result     *ImageLayoutResult `json:"result"`
 		UID        string             `json:"uid"`
@@ -97,18 +140,20 @@ type ImageLayoutSyncResponse struct {
 
 // ImageLayoutAsyncResponse represents the async image layout submission response.
 type ImageLayoutAsyncResponse struct {
-	Code string `json:"code"`
-	Msg  string `json:"msg,omitempty"`
-	Data *struct {
+	TraceID string `json:"-"`
+	Code    string `json:"code"`
+	Msg     string `json:"msg,omitempty"`
+	Data    *struct {
 		UID string `json:"uid"`
 	} `json:"data"`
 }
 
 // ImageLayoutStatusResponse represents the async image layout processing status.
 type ImageLayoutStatusResponse struct {
-	Code string `json:"code"`
-	Msg  string `json:"msg,omitempty"`
-	Data *struct {
+	TraceID string `json:"-"`
+	Code    string `json:"code"`
+	Msg     string `json:"msg,omitempty"`
+	Data    *struct {
 		Status     string             `json:"status"`
 		Detail     string             `json:"detail,omitempty"`
 		Progress   int                `json:"progress,omitempty"`

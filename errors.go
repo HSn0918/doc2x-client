@@ -17,9 +17,24 @@ var (
 	ErrNilWriter         = errors.New("writer cannot be nil")
 )
 
-func errCode(operation, code, msg string) error {
+// errCode formats a failure message when the API reports a non-success code.
+func errCode(operation, code, msg, traceID string) error {
+	traceID = normalizeTraceID(traceID)
 	if msg == "" {
-		return fmt.Errorf("%s failed with code %s", operation, code)
+		return fmt.Errorf("%s failed with code %s (trace-id: %s)", operation, code, traceID)
 	}
-	return fmt.Errorf("%s failed with code %s: %s", operation, code, msg)
+	return fmt.Errorf("%s failed with code %s: %s (trace-id: %s)", operation, code, msg, traceID)
+}
+
+// errStatus formats an error with HTTP status and trace id.
+func errStatus(operation string, statusCode int, status, traceID string) error {
+	traceID = normalizeTraceID(traceID)
+	return fmt.Errorf("%s failed with status %d: %s (trace-id: %s)", operation, statusCode, status, traceID)
+}
+
+func normalizeTraceID(traceID string) string {
+	if traceID == "" {
+		return "unknown"
+	}
+	return traceID
 }

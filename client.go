@@ -17,12 +17,16 @@ var _ Client = (*client)(nil)
 
 type Option func(*client)
 
+// WithBaseURL sets the base URL that the client will use for API calls.
+// This is useful for custom environments or testing against mock servers.
 func WithBaseURL(baseURL string) Option {
 	return func(c *client) {
 		c.restyClient.SetBaseURL(baseURL)
 	}
 }
 
+// WithTimeout overrides the default HTTP timeout for the API client.
+// A non-positive duration leaves the timeout unchanged.
 func WithTimeout(timeout time.Duration) Option {
 	return func(c *client) {
 		if timeout > 0 {
@@ -31,6 +35,8 @@ func WithTimeout(timeout time.Duration) Option {
 	}
 }
 
+// WithAPIKey assigns the API key that will be sent in the Authorization header.
+// The key is shared with both the main and transfer clients.
 func WithAPIKey(apiKey string) Option {
 	return func(c *client) {
 		c.apiKey = apiKey
@@ -68,10 +74,13 @@ func WithProcessingTimeout(timeout time.Duration) Option {
 	}
 }
 
-func NewClient(opts ...Option) Client {
+// NewClient creates a configured client that can speak to the doc2x service.
+// Options allow overriding the base API client, transfer client, and processing timeout.
+func NewClient(apiKey string, opts ...Option) Client {
 	c := &client{
 		restyClient:       newDefaultAPIClient(),
 		processingTimeout: ProcessingTimeout,
+		apiKey:            apiKey,
 	}
 
 	for _, opt := range opts {
@@ -99,6 +108,7 @@ func (c *client) Version() string {
 	return APIVersion
 }
 
+// newDefaultAPIClient returns a resty client preconfigured for doc2x API requests.
 func newDefaultAPIClient() *resty.Client {
 	return resty.New().
 		SetBaseURL(DefaultBaseURL).
@@ -109,6 +119,7 @@ func newDefaultAPIClient() *resty.Client {
 		SetRetryMaxWaitTime(5 * time.Second)
 }
 
+// newTransferClient builds an HTTP client tailored for transfer operations with the given timeout.
 func newTransferClient(timeout time.Duration) *resty.Client {
 	client := resty.New().
 		SetTimeout(timeout).

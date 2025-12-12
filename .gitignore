@@ -4,3 +4,6 @@
 *_test.go
 *.pdf
 /.idea
+/bin
+/scripts
+/tmp

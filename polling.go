@@ -84,6 +84,7 @@ func waitWithPolling[T any](ctx context.Context, uid string, pollInterval time.D
 	}
 }
 
+// waitForNextPoll blocks until the next ticker pulse or context cancellation.
 func waitForNextPoll(ctx context.Context, ticker *time.Ticker, operation string) error {
 	select {
 	case <-ctx.Done():
@@ -93,6 +94,7 @@ func waitForNextPoll(ctx context.Context, ticker *time.Ticker, operation string)
 	}
 }
 
+// isTransientError reports whether an error is temporary and merits a retry.
 func isTransientError(err error) bool {
 	if err == nil {
 		return false

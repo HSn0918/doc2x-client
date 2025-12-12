@@ -8,6 +8,7 @@ const (
 	DefaultTimeout    = 30 * time.Second
 	ProcessingTimeout = 5 * time.Minute
 	APIVersion        = "v2"
+	TraceIDHeader     = "trace-id"
 )
 
 // Response codes and status constants
@@ -15,9 +16,9 @@ const (
 	CodeSuccess = "success"
 	CodeFailed  = "failed"
 
-	StatusSuccess    = "success"
-	StatusFailed     = "failed"
-	StatusProcessing = "processing"
+	StatusSuccess    = string(ParseStatusSuccess)
+	StatusFailed     = string(ParseStatusFailed)
+	StatusProcessing = string(ParseStatusProcessing)
 )
 
 // API endpoints

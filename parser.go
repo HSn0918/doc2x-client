@@ -35,12 +35,15 @@ func (c *client) UploadPDFReader(ctx context.Context, pdfReader io.Reader) (*Upl
 		return nil, fmt.Errorf("upload PDF failed: %w", err)
 	}
 
+	traceID := resp.Header().Get(TraceIDHeader)
+	result.TraceID = traceID
+
 	if !resp.IsSuccess() {
-		return nil, fmt.Errorf("upload PDF failed with status %d: %s", resp.StatusCode(), resp.Status())
+		return nil, errStatus("upload PDF", resp.StatusCode(), resp.Status(), traceID)
 	}
 
 	if err := ensureAPISuccess(result.Code, result.Msg); err != nil {
-		return nil, errCode("upload PDF", result.Code, result.Msg)
+		return nil, errCode("upload PDF", result.Code, result.Msg, traceID)
 	}
 
 	return &result, nil
@@ -58,12 +61,15 @@ func (c *client) PreUpload(ctx context.Context) (*PreUploadResponse, error) {
 		return nil, fmt.Errorf("preupload failed: %w", err)
 	}
 
+	traceID := resp.Header().Get(TraceIDHeader)
+	result.TraceID = traceID
+
 	if !resp.IsSuccess() {
-		return nil, fmt.Errorf("preupload failed with status %d: %s", resp.StatusCode(), resp.Status())
+		return nil, errStatus("preupload", resp.StatusCode(), resp.Status(), traceID)
 	}
 
 	if err := ensureAPISuccess(result.Code, ""); err != nil {
-		return nil, errCode("preupload", result.Code, "")
+		return nil, errCode("preupload", result.Code, "", traceID)
 	}
 
 	return &result, nil
@@ -125,12 +131,15 @@ func (c *client) GetStatus(ctx context.Context, uid string) (*StatusResponse, er
 		return nil, fmt.Errorf("get status for UID %s failed: %w", uid, err)
 	}
 
+	traceID := resp.Header().Get(TraceIDHeader)
+	result.TraceID = traceID
+
 	if !resp.IsSuccess() {
-		return nil, fmt.Errorf("get status failed with status %d: %s", resp.StatusCode(), resp.Status())
+		return nil, errStatus("get status", resp.StatusCode(), resp.Status(), traceID)
 	}
 
 	if err := ensureAPISuccess(result.Code, result.Msg); err != nil {
-		return nil, errCode("get status", result.Code, result.Msg)
+		return nil, errCode("get status", result.Code, result.Msg, traceID)
 	}
 
 	return &result, nil
@@ -148,14 +157,14 @@ func (c *client) WaitForParsing(ctx context.Context, uid string, pollInterval ti
 		}
 
 		switch status.Data.Status {
-		case StatusSuccess:
+		case ParseStatusSuccess:
 			return true, nil
-		case StatusFailed:
+		case ParseStatusFailed:
 			detail := status.Data.Detail
 			if detail == "" {
 				detail = "unknown error"
 			}
-			return false, fmt.Errorf("parse failed: %s", detail)
+			return false, fmt.Errorf("parse failed: %s (trace-id: %s)", detail, status.TraceID)
 		default:
 			return false, nil
 		}
