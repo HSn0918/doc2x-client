@@ -44,5 +44,5 @@ layoutStatus, _ := c.WaitForImageLayout(ctx, job.Data.UID, 2*time.Second)
 
 ## 参考
 
-- Doc2X API v2 官方文档：https://noedgeai.feishu.cn/wiki/Q8QIw3PT7i4QghkhPoecsmSCnG1
+- Doc2X API v2 官方文档：https://doc2x.noedgeai.com/help/zh-cn/api/doc2x-api-interface.html
 - Doc2X 常见问题 / 图片接口文档：见飞书文档入口
