@@ -34,6 +34,9 @@ data, _ := c.DownloadFile(ctx, result.Data.URL)
 layout, _ := c.ParseImageLayout(ctx, imageBytes) // 同步
 job, _ := c.AsyncParseImageLayout(ctx, imageBytes) // 异步
 layoutStatus, _ := c.WaitForImageLayout(ctx, job.Data.UID, 2*time.Second)
+
+zipData, _ := c.FetchConvertZIP(ctx, layout.Data.ConvertZIP)
+_ = os.WriteFile("layout.zip", zipData, 0o644)
 ```
 
 ## 注意事项

@@ -42,6 +42,8 @@ type ImageParser interface {
 	AsyncParseImageLayout(ctx context.Context, imageData []byte) (*ImageLayoutAsyncResponse, error)
 	GetImageLayoutStatus(ctx context.Context, uid string) (*ImageLayoutStatusResponse, error)
 	WaitForImageLayout(ctx context.Context, uid string, pollInterval time.Duration) (*ImageLayoutStatusResponse, error)
+	FetchConvertZIP(ctx context.Context, convertZIP string) ([]byte, error)
+	FetchConvertZIPTo(ctx context.Context, convertZIP string, dst io.Writer) error
 }
 
 // Client combines all doc2x operations

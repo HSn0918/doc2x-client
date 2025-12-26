@@ -13,6 +13,7 @@ var (
 	ErrEmptyPresignedURL = errors.New("presigned url cannot be empty")
 	ErrEmptyTargetFormat = errors.New("target format cannot be empty")
 	ErrEmptyDownloadURL  = errors.New("download url cannot be empty")
+	ErrEmptyConvertZIP   = errors.New("convert_zip cannot be empty")
 	ErrNilReader         = errors.New("reader cannot be nil")
 	ErrNilWriter         = errors.New("writer cannot be nil")
 )
